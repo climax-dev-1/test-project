@@ -1,32 +1,31 @@
 # Migration Comparison: Passage to New Provider
 
-## Metrics Comparison
+## Strategy Comparison
 
-| Metric | **Amazon Cognito + Authsignal** | **Auth0** |
+| Metric | **Pure Amazon Cognito** | **Auth0** |
 | :--- | :--- | :--- |
 | **User Friction** | ⭐⭐⭐⭐⭐ (Very Low) | ⭐⭐⭐ (Moderate) |
-| **Reason** | Can support "Legacy Login" (Passage) side-by-side with new login. User uses FaceID to migrate. | Likely forces "Email Fallback" first because bridging two different Passkey providers in Universal Login is complex. |
-| **Development Speed** | ⭐⭐⭐ (Moderate) | ⭐⭐⭐⭐ (High) |
-| **Reason** | Requires custom Go logic to "Exchange Passage Token for Cognito Token". | Auth0 handles the "Email OTP" flow out of the box, less custom code. |
+| **Reason** | Full control over UI. Supports "Silent Migration" via custom code. | Likely forces "Email Fallback" via Web UI. |
+| **Development Speed** | ⭐ (Low) | ⭐⭐⭐⭐ (High) |
+| **Reason** | **Hard Mode.** You must write your own FIDO2/WebAuthn server inside AWS Lambda. | Auth0 handles the "Email OTP" flow out of the box. |
 | **Cost Effectiveness** | ⭐⭐⭐⭐⭐ (High) | ⭐⭐ (Low) |
-| **Reason** | Cognito is Free. Authsignal is Free/Cheap. | Auth0 Passwordless/MFA is expensive at scale. |
-| **Long-Term UX** | ⭐⭐⭐⭐⭐ (Native) | ⭐⭐⭐ (Web-based) |
-| **Reason** | Final state is 100% Native UI (FaceID). | Final state is likely still a Web Modal (Universal Login). |
+| **Reason** | **$0** (Free Tier). | Auth0 Passwordless is expensive at scale. |
+| **Maintenance** | ⭐⭐ (High) | ⭐⭐⭐⭐⭐ (Low) |
+| **Reason** | You own the crypto code, the DynamoDB tables, and the email delivery logic. | Fully managed SaaS. |
 
 ---
 
-## Why "Cognito + Authsignal" wins the Migration
+## Why "Pure Cognito" is Hard but Powerful
 
-The critical difference is **Control**.
+The critical difference is **Ownership**.
 
-*   **With Cognito + Authsignal:** You control the iOS ViewControllers. You can render the "Old Passage Button" AND the "New FaceID Button" on the same screen. You can quietly exchange tokens in the background.
-*   **With Auth0:** You hand off control to a Web URL (`auth.myapp.com`). You cannot easily inject the "Passage iOS SDK" into that web page. This forces you to fallback to Email OTP for the migration step, which is annoying for users accustomed to FaceID.
+*   **With Pure Cognito:** You are essentially building your own Auth Provider using AWS primitives (Lambda + DynamoDB). You have 100% control over the "State Machine" (e.g., Check Passkey -> Fail -> Check Email). This allows you to replicate the exact Passage flow you described.
+*   **With Auth0:** You are renting a pre-built flow. Customizing it to this degree (Passkey first, then Email) inside their "Universal Login" is very difficult and often unsupported.
 
 ## Summary Recommendation
 
-**Go with the [Amazon Cognito + Authsignal] strategy.**
+**If you have strong Backend Engineering resources:**
+Go with **Pure Amazon Cognito**. It gives you the exact UX you want (Passkey -> Email Fallback) with zero vendor cost. But be prepared to write ~500-1000 lines of Go code to handle the WebAuthn verification and Lambda orchestration.
 
-1.  It preserves the **"FaceID-first"** experience your users love.
-2.  It allows a "Silent Migration" where the user authenticates with the old system, and you seamlessly upgrade them to the new system in the background.
-3.  It avoids the "Email Loop" friction.
-
+**If you want speed:**
+Go with **Auth0** (or the Cognito + Authsignal hybrid). Building a secure FIDO2 server from scratch in Lambda is non-trivial and security-critical.
