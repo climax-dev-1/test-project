@@ -20,75 +20,72 @@
 
 *   **Amazon Cognito (Winner for "Native" Feel):**
     *   **Mechanism:** Supports the **Secure Remote Password (SRP)** protocol.
-    *   **UX:** You can build standard Swift `UITextField`s for username and password. The user **never leaves your app**. There is no browser popup, no "Show allows ‘app’ to use ‘auth0.com’ to sign in" alert.
-    *   **Effort:** High. You must handle UI states (loading, error, retry) and flows (forgot password, new password required) manually using the AWS Amplify SDK or AWS Mobile SDK.
+    *   **UX:** You can build standard Swift `UITextField`s for username and password. The user **never leaves your app**.
+    *   **Effort:** High. You must handle UI states (loading, error, retry) manually.
 
 *   **Auth0:**
     *   **Mechanism:** Uses **OIDC with PKCE**.
-    *   **UX:** Requires opening a system browser modal (`ASWebAuthenticationSession` or `SFSafariViewController`). The user sees a "Continue" system alert, then a web page loads.
-    *   **Effort:** Low. The `Auth0.swift` SDK handles the session, keychain storage, and error mapping.
+    *   **UX:** Requires opening a system browser modal (`ASWebAuthenticationSession`). The user sees a "Continue" alert, then a web page loads.
+    *   **Effort:** Low. `Auth0.swift` SDK handles session and keychain.
+
+*   **Clerk:**
+    *   **Mechanism:** Web-wrapper.
+    *   **UX:** **Web-View Dependent.** Clerk’s iOS SDK is essentially a wrapper around a web session. It does *not* support fully native fields easily without losing security features like bot protection.
+    *   **Effort:** Very Low (if using their pre-built UIs).
+
+*   **Authsignal:**
+    *   **Mechanism:** Native Passkeys (WebAuthn).
+    *   **UX:** **Best-in-class for MFA.** Provides a native iOS SDK specifically for **FaceID/TouchID**.
+    *   **Effort:** Moderate. Used primarily as a second step, not the initial signup.
 
 *   **Authress:**
     *   **Mechanism:** Standard OIDC.
-    *   **UX:** Similar to Auth0, relies on a browser redirect flow to ensuring security and standard compliance.
-    *   **Effort:** Moderate. SDKs are lighter weight but require standard OIDC handling.
+    *   **UX:** Browser redirect flow similar to Auth0.
+    *   **Effort:** Moderate.
 
 ### B. Backend Integration (Go + GraphQL)
 
-All three generate **JWTs (JSON Web Tokens)**. Your Go server will validate them similarly using a JWKS (JSON Web Key Set) URL.
-
 *   **Amazon Cognito:**
-    *   **Validation:** Use a standard library like `github.com/golang-jwt/jwt` to verify the token signature against `https://cognito-idp.{region}.amazonaws.com/{userPoolId}/.well-known/jwks.json`.
-    *   **Roles/Permissions:** To add roles (e.g., `admin`, `editor`) to the JWT, you must write a **Pre-Token Generation Lambda** function (Node.js/Python/Go) in AWS. This adds complexity.
+    *   **Validation:** Standard JWT verification via JWKS.
+    *   **Roles:** **Pre-Token Generation Lambda** (Node/Go) required to inject custom roles into claims.
 
 *   **Auth0:**
-    *   **Validation:** Similar JWKS verification against `https://{tenant}.auth0.com/.well-known/jwks.json`.
-    *   **Roles/Permissions:** Much easier. You can use **Auth0 Actions** (JavaScript snippets) to inject custom claims (e.g., `https://myapp.com/roles`) into the token dynamically.
+    *   **Validation:** Standard JWT verification via JWKS.
+    *   **Roles:** **Auth0 Actions** (JS) allow easy injection of custom claims (`https://myapp.com/roles`).
+
+*   **Clerk:**
+    *   **Validation:** Mature Go SDK (`github.com/clerkinc/clerk-sdk-go`).
+    *   **Roles:** "Session Claims" feature makes adding custom data to tokens very easy via the dashboard.
+
+*   **Authsignal:**
+    *   **Validation:** `authsignal-go` SDK.
+    *   **Roles:** Not a primary IdP. You use the SDK to check `action_state` (e.g., `ALLOW`, `CHALLENGE_REQUIRED`) rather than validating identity tokens.
 
 *   **Authress:**
     *   **Validation:** Standard JWT verification.
-    *   **Roles/Permissions:** **Best in class.** Instead of baking roles into a static JWT, Authress provides a dedicated API to check permissions in real-time (e.g., `authressClient.UserPermissions.AuthorizeUser(...)`). This is powerful for complex apps but adds a network call or sidecar dependency.
+    *   **Roles:** **Best in class.** Real-time permission checking API (`authressClient.UserPermissions.AuthorizeUser(...)`) instead of static token claims.
 
 ### C. Back-Office User Lookup (By Email)
 
 *   **Amazon Cognito:**
-    *   **API:** `ListUsers`
-    *   **Filter Syntax:** `email = "user@example.com"`
-    *   **Go Code:** `cognitoClient.ListUsers(context.TODO(), &cognitoidentityprovider.ListUsersInput{Filter: aws.String("email = ...")})`
-    *   **Rate Limits:** Default is somewhat low (can be throttled if you do this frequently).
+    *   **API:** `ListUsers` (Filter: `email = "..."`).
+    *   **Pros/Cons:** Reliable but strict rate limits.
 
 *   **Auth0:**
-    *   **API:** Management API v2 (`GET /api/v2/users-by-email`)
-    *   **Go Code:** Uses the `auth0` management SDK. Very clean.
-    *   **Rate Limits:** Generous for backend-to-backend calls, but strict limits on free/lower tiers.
+    *   **API:** Management API v2 (`GET /api/v2/users-by-email`).
+    *   **Pros/Cons:** Very clean SDK, generic rate limits apply.
 
-### D. Emerging Contenders (Clerk & Authsignal)
+*   **Clerk:**
+    *   **API:** `client.Users().ListAll(params)`.
+    *   **Pros/Cons:** Excellent Go SDK support. Intuitive search.
 
-These two are newer players with distinct philosophies.
+*   **Authress:**
+    *   **API:** User Management API.
+    *   **Pros/Cons:** Good support, designed for B2B hierarchy lookups.
 
-#### **Clerk** (The "Frontend-First" Choice)
-*   **Philosophy:** "User Management should be a UI component, not just an API."
-*   **iOS Experience:**
-    *   **Status:** ⚠️ **Web-View Dependent.**
-    *   Clerk’s iOS SDK (`ClerkSDK`) is essentially a wrapper around a web browser session. It does *not* currently support a fully native implementation (like generic `UITextFields` sending JSON to an API) easily without losing security features like bot protection.
-    *   **Pros:** You get "Profile Management," "Avatar Upload," and "Organization Switcher" screens for free (as web views).
-    *   **Cons:** It feels like a web app inside a native shell.
-*   **Go Integration:**
-    *   **SDK:** `github.com/clerkinc/clerk-sdk-go`
-    *   **Middleware:** Very mature. `clerk.WithSession(http.Handler)` automatically injects user context.
-    *   **User Lookup:** Excellent. `client.Users().ListAll(params)` is intuitive and allows searching by email, phone, or external ID easily.
-    *   **Pricing:** **Free for 10k MAU.** Very generous.
-
-#### **Authsignal** (The "Fraud & MFA" Specialist)
-*   **Philosophy:** "You already have a login (e.g., Cognito/Auth0/Custom), but you need secure MFA (Passkeys) and Fraud rules."
-*   **iOS Experience:**
-    *   **Status:** ✅ **Native Passkey Support.**
-    *   They provide a native iOS SDK specifically for **Passkeys (FaceID/TouchID)**. This allows you to use Cognito for the "base" user and Authsignal for the "MFA" layer.
-    *   **UX:** Highly native feel for the verification step.
-*   **Go Integration:**
-    *   **SDK:** `github.com/authsignal/authsignal-go`
-    *   **Role:** It is **not** a primary IdP (Identity Provider). You wouldn't typically "look up a user by email" in Authsignal to find their profile data; you would look them up to check their *risk score* or *MFA status*.
-*   **Best Use Case:** Use **Cognito** for the user directory (free) + **Authsignal** for high-security actions (e.g., "Withdraw Funds" triggers a FaceID check).
+*   **Authsignal:**
+    *   **API:** User API.
+    *   **Pros/Cons:** Used to look up *risk status* or *MFA enrollment*, not typically for general user profile data.
 
 ---
 
@@ -101,6 +98,8 @@ These two are newer players with distinct philosophies.
 | **Amazon Cognito** | Free Tier | **$0.00** | Free up to 50,000 MAUs indefinitely. |
 | **Auth0** | B2C Essentials | **~$250.00+** | Price jumps significantly if you need "MFA" or "Custom Domains". |
 | **Authress** | Standard | **Contact** | Likely usage-based, often competitive with Auth0 but less public data. |
+| **Authsignal** | Base Plan | **Free** | Free up to 10,000 MAUs. Great for adding MFA cheaply. |
+| **Clerk** | Hobby | **Free** | Free up to 10,000 MAUs. $0.02/user/mo after that. |
 
 ---
 
