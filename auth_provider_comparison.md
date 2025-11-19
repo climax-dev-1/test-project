@@ -2,15 +2,15 @@
 
 ## 1. Executive Summary
 
-| Feature | **Amazon Cognito** | **Auth0** | **Authress** |
-| :--- | :--- | :--- | :--- |
-| **Best For** | **Native Experience & Cost** | **Dev Speed & Features** | **Complex Authorization** |
-| **Cost (10k MAU)** | **$0.00 / month** | **~$250 - $800 / month** | **Contact Sales** |
-| **iOS Login UI** | **Fully Native** (Custom Swift UI) | **Web Modal** (SFSafariViewController) | **Web Modal** (Browser Redirect) |
-| **User Lookup** | ✅ Via `ListUsers` API | ✅ Via Management API | ✅ Via User API |
-| **Go Integration** | Standard JWKS Verification | Standard JWKS Verification | Specialized SDKs |
-| **Custom Claims** | Via Lambda Triggers (Complex) | Via Actions (Easy JS) | Native Permission Model |
-| **Social Login** | ✅ Limited (Google, FB, Apple, Amazon, OIDC) | ✅ Extensive (30+ providers out of box) | ✅ Standard (Google, Github, Microsoft, etc.) |
+| Feature | **Amazon Cognito** | **Auth0** | **Authress** | **Authsignal** | **Clerk** |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Best For** | **Native Experience & Cost** | **Dev Speed & Features** | **Complex Authorization** | **Fraud/MFA & Passwordless** | **Next.js/Web Startups** |
+| **Cost (10k MAU)** | **$0.00 / month** | **~$250 - $800 / month** | **Contact Sales** | **Free** (Up to 10k MAU) | **Free** (Up to 10k MAU) |
+| **iOS Login UI** | **Fully Native** (Custom Swift UI) | **Web Modal** (SFSafariViewController) | **Web Modal** (Browser Redirect) | **Web Modal** (Browser Redirect) | **Web Modal** (Browser Redirect) |
+| **User Lookup** | ✅ Via `ListUsers` API | ✅ Via Management API | ✅ Via User API | ✅ Via User API | ✅ Via User API |
+| **Go Integration** | Standard JWKS Verification | Standard JWKS Verification | Specialized SDKs | Standard JWKS / SDK | Standard JWKS / SDK |
+| **Custom Claims** | Via Lambda Triggers (Complex) | Via Actions (Easy JS) | Native Permission Model | Limited | Via "Session Claims" (Easy) |
+| **Social Login** | ✅ Limited (Google, FB, Apple, Amazon, OIDC) | ✅ Extensive (30+ providers out of box) | ✅ Standard (Google, Github, Microsoft, etc.) | ❌ Focus is on MFA/Passkeys | ✅ Extensive (20+ providers) |
 
 ---
 
@@ -99,4 +99,14 @@ All three generate **JWTs (JSON Web Tokens)**. Your Go server will validate them
 
 **Why?**
 *   If your application is B2B (selling to other companies) and requires complex "User Management" features where your customers need to manage their own teams and permissions. Authress excels here.
+
+### **Alternative: Authsignal**
+
+**Why?**
+*   If you want to build your own native UI but need a specialized "Passwordless" or "MFA-only" layer to sit alongside it. Authsignal is often used as an add-on for fraud detection and MFA rather than a primary identity provider for social login.
+
+### **Alternative: Clerk**
+
+**Why?**
+*   If developer speed is the #1 priority and you are okay with a web-based login modal. Clerk has the best "Developer Experience" of the bunch but is heavily optimized for React/Web stacks. Their iOS SDK is newer and relies on web redirects, meaning you lose the "Native" feel compared to Cognito.
 
