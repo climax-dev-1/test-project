@@ -1,100 +1,83 @@
-# Migration Strategy: Passage to Amazon Cognito
+# Migration Strategy: Passage (1Password) → Amazon Cognito
 
-## 1. Executive Summary
-
-Migrating from a Passkey-first provider like Passage to Amazon Cognito presents a unique challenge: **Passkeys cannot be exported.** They are cryptographically bound to the specific domain (RP ID) and cannot be moved.
-
-This strategy prioritizes **User Continuity**. We cannot migrate the credentials (passkeys), but we can migrate the **Identities** (Users) and use a "Just-in-Time" (JIT) upgrade flow to re-register credentials.
-
-*   **Primary Goal:** Zero-downtime migration for account access.
-*   **Secondary Goal:** Re-establish Passkeys for high-security UX.
-*   **Mechanism:** Bulk Email Import + Lazy Migration.
+## Overview
+**Objective:** Migrate from Passage (Passkey-first) to Amazon Cognito while minimizing user friction.
+**Core Challenge:** Passage holds the FIDO2 (Passkey) credentials. These are bound to the domain (`login.roccofridge.com`) and **cannot be exported** to Cognito.
+**Impact:** **100% of Passkey users must re-register their passkey.** There is no "backend migration" for passkeys.
 
 ---
 
-## 2. Migration Architecture
+## Strategy: "The Dual-Auth Bridge"
 
-### Phase 1: The "Parallel" State
-During this phase, you bulk import users into Cognito so their "Identity" exists, but they have no credentials.
+Since we cannot move the credentials, we must move the *identity* first, then re-establish the credentials.
 
-```mermaid
-graph TD
-    subgraph "Legacy (Passage)"
-    A[Export User CSV] -->|Extract Emails| B[Data Processor]
-    end
-    
-    subgraph "New (Cognito)"
-    B -->|CSV Import| C[Cognito User Pool]
-    C -->|Status: FORCE_CHANGE_PASSWORD| D[User: jane@example.com]
-    end
-```
+### Phase 1: Identity Export & Sync
+1.  **Export Users:** Export all users (Email, UserID) from Passage.
+2.  **Import to Cognito:** Bulk import these users into a Cognito User Pool.
+    *   *Note:* Since Passage is passwordless, there are no password hashes to migrate. You will create these users in Cognito with a status of `FORCE_CHANGE_PASSWORD` or simply as "External Provider" users if using Authsignal.
 
-### Phase 2: The "Lazy Migration" Flow (Login Experience)
-Since users cannot use their old passkeys (bound to `login.roccofridge.com`), the first login attempt on the new version (bound to `auth.roccofridge.com`) will fail validation if you tried to use the old keys. Instead, we steer them through a one-time "Repair" flow.
+### Phase 2: The "Re-Keying" UX Flow
+We need a transition period where the app supports *both* Passage (to prove who they are) and Cognito (to set up the new account).
+
+#### Step 1: Login with Legacy (Passage)
+User opens the app. We detect they are a "Legacy User" (stored in local `UserDefaults` or via API check).
+*   **Action:** App presents the old Passage login screen.
+*   **User:** Uses their existing FaceID/TouchID.
+*   **Result:** App gets a valid `Passage_Token`.
+
+#### Step 2: Exchange Token (Backend)
+Your Go API receives the `Passage_Token`.
+*   **Action:** API verifies the token with Passage.
+*   **Action:** API looks up the corresponding user in **Amazon Cognito**.
+*   **Action:** API generates a custom "One-Time Login Token" or uses Cognito's `AdminInitiateAuth` to securely log this user into Cognito for the first time.
+
+#### Step 3: Upgrading the Credential
+Now the user is logged in with a valid Cognito Session.
+*   **Action:** App prompts: *"We’ve upgraded our security. Please enable FaceID again."*
+*   **Action:** User taps "Enable".
+*   **Action:** App uses **Authsignal SDK** (or Cognito custom flow) to register a **NEW Passkey** against the new domain.
+*   **Result:** User now has a valid credential in the new system.
+
+### Phase 3: Decommission
+Once 90% of active users have "re-keyed", remove the Passage SDK from the app update.
+
+---
+
+## Architecture Diagram
 
 ```mermaid
 sequenceDiagram
-    actor User
     participant App as iOS App
-    participant Authsignal as Authsignal (Orchestrator)
-    participant Cognito as Cognito (User DB)
+    participant Go as Go API
+    participant Pas as Passage (Legacy)
+    participant Cog as Amazon Cognito
+    participant AS as Authsignal (New)
 
-    User->>App: Opens App (New Version)
-    Note over App: Old Passkey invalid for new domain
-    
-    App->>Authsignal: Track Action (Login via Email)
-    Authsignal->>Cognito: Check User Exists?
-    Cognito-->>Authsignal: Yes (Status: FORCE_RESET)
-    
-    Authsignal-->>App: Challenge: Email OTP (Magic Link)
-    App->>User: "New System Update: Check your Email"
-    
-    User->>App: Enters OTP
-    App->>Authsignal: Verify OTP
-    Authsignal->>Cognito: Validate & Get Token
-    
-    Authsignal-->>App: Success + Prompt "Setup Passkey"
-    
-    User->>App: "Yes, Setup FaceID"
-    App->>Authsignal: WebAuthn Registration (New Domain)
-    Note over App: New Passkey stored for auth.roccofridge.com
+    Note over App, AS: Phase 2: Migration Flow
+    App->>App: Check if "Migrated" flag exists?
+    alt Not Migrated
+        App->>Pas: 1. Sign in with OLD Passkey
+        Pas-->>App: Return Legacy Token
+        App->>Go: 2. Send Legacy Token
+        Go->>Pas: Verify Token
+        Go->>Cog: 3. Find User by Email
+        Go->>Cog: AdminInitiateAuth (Force Login)
+        Cog-->>Go: Return Cognito Tokens
+        Go-->>App: Return Cognito Tokens
+        App->>AS: 4. "Register New Passkey" (Re-enroll)
+        AS-->>App: Success
+        App->>App: Set "Migrated" = True
+    else Already Migrated
+        App->>AS: Login with NEW Passkey
+    end
 ```
 
----
+## Key Risks & Mitigations
 
-## 3. Step-by-Step Implementation Plan
+| Risk | Mitigation |
+| :--- | :--- |
+| **User Confusion** | Update messaging: "Security Upgrade" instead of "Migration". |
+| **Passage Shutdown** | Ensure all "Identity Data" (Emails/IDs) is backed up before they shut down API access. |
+| **Domain Change** | Users will see a system prompt "Do you want to save a passkey for [new-domain]?" This is unavoidable. |
 
-### Step 1: Data Export & Cleaning
-1.  Export your user list from the Passage Dashboard.
-2.  Filter for valid email addresses.
-3.  Format a CSV for Cognito Import:
-    *   Headers: `name`, `email`, `email_verified`, `phone_number_verified`
-    *   Set `email_verified` to `true` (assuming you trust Passage).
-
-### Step 2: Bulk Import to Cognito
-1.  Go to **Cognito Console** -> **User Pool** -> **Users** -> **Import users**.
-2.  Upload your CSV.
-3.  This creates "Shadow Accounts" for all users. They exist, but have no password and no passkey.
-
-### Step 3: Configure Authsignal (The Glue)
-1.  Set up Authsignal with **Cognito** as the OIDC Provider.
-2.  Enable **Email Magic Link / OTP** in Authsignal.
-3.  Enable **Passkeys (WebAuthn)** in Authsignal.
-4.  Create a Rule:
-    *   *IF* user has no registered Passkey → Challenge Email OTP.
-    *   *IF* user has registered Passkey → Challenge Passkey.
-
-### Step 4: iOS App Update
-1.  Update the `Info.plist` associated domains to include the new Authsignal domain (e.g., `auth.roccofridge.com`).
-2.  Implement the `Authsignal` iOS SDK.
-3.  Release the app update.
-
----
-
-## 4. User Communication Plan
-
-Since users *must* take action (checking email) for their first login, proactive communication is key.
-
-*   **Email Blast (T-2 Days):** "We are upgrading our security system. You may be asked to verify your email on your next login."
-*   **In-App Message (Old Version):** "Update available. Please update to ensure uninterrupted access."
 

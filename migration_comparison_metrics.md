@@ -1,44 +1,32 @@
-# Migration Strategy Comparison: Cognito vs. Auth0
+# Migration Comparison: Passage to New Provider
 
-## 1. Comparison Matrix
+## Metrics Comparison
 
-| Metric | **Strategy A: Cognito + Authsignal** | **Strategy B: Auth0** |
+| Metric | **Amazon Cognito + Authsignal** | **Auth0** |
 | :--- | :--- | :--- |
-| **Effectiveness** | ⭐⭐⭐⭐⭐ (Best UX) | ⭐⭐⭐⭐ (Reliable) |
-| **User Experience** | ✅ **Native** (No Webviews) | ⚠️ **Web Redirect** (SafariVC) |
-| **Migration Friction**| **Medium** (Users must verify email once) | **Medium** (Users must verify email once) |
-| **Dev Speed** | 🐢 **Slower** (Requires orchestrating 2 services) | 🐇 **Faster** (One SDK, handled by hosted page) |
-| **Cost (10k MAU)** | 💰 **Free** (Cognito Free + Authsignal Free) | 💸 **~$300/mo** (Auth0 B2C Essentials) |
-| **Passkey Support** | ✅ **First-Class Native** (via Authsignal) | ✅ **Web-Based** (via Universal Login) |
-| **Long Term Control**| **High** (You own the orchestrator logic) | **Low** (Locked into Auth0's flows) |
+| **User Friction** | ⭐⭐⭐⭐⭐ (Very Low) | ⭐⭐⭐ (Moderate) |
+| **Reason** | Can support "Legacy Login" (Passage) side-by-side with new login. User uses FaceID to migrate. | Likely forces "Email Fallback" first because bridging two different Passkey providers in Universal Login is complex. |
+| **Development Speed** | ⭐⭐⭐ (Moderate) | ⭐⭐⭐⭐ (High) |
+| **Reason** | Requires custom Go logic to "Exchange Passage Token for Cognito Token". | Auth0 handles the "Email OTP" flow out of the box, less custom code. |
+| **Cost Effectiveness** | ⭐⭐⭐⭐⭐ (High) | ⭐⭐ (Low) |
+| **Reason** | Cognito is Free. Authsignal is Free/Cheap. | Auth0 Passwordless/MFA is expensive at scale. |
+| **Long-Term UX** | ⭐⭐⭐⭐⭐ (Native) | ⭐⭐⭐ (Web-based) |
+| **Reason** | Final state is 100% Native UI (FaceID). | Final state is likely still a Web Modal (Universal Login). |
 
 ---
 
-## 2. Detailed Analysis
+## Why "Cognito + Authsignal" wins the Migration
 
-### Effectiveness
-*   **Cognito + Authsignal:** This is the most effective for your specific requirement ("Passkey First, Email Fallback"). Authsignal's rules engine is built specifically for this decision tree.
-*   **Auth0:** Effective, but "Passkey First" logic is often opaque inside their "Smart Login" algorithms. You have less control over *when* it asks for a passkey vs. a password.
+The critical difference is **Control**.
 
-### Development Speed
-*   **Auth0:** You can be up and running in an afternoon. Import users, drop in the SDK, and you are done. The complexity is handled by their server.
-*   **Cognito + Authsignal:** Requires more setup. You need to configure Cognito, configure Authsignal, link them via OIDC, and write the iOS logic to handle the Authsignal challenge loop.
+*   **With Cognito + Authsignal:** You control the iOS ViewControllers. You can render the "Old Passage Button" AND the "New FaceID Button" on the same screen. You can quietly exchange tokens in the background.
+*   **With Auth0:** You hand off control to a Web URL (`auth.myapp.com`). You cannot easily inject the "Passage iOS SDK" into that web page. This forces you to fallback to Email OTP for the migration step, which is annoying for users accustomed to FaceID.
 
-### Cost Implications
-*   **Cognito + Authsignal:** Likely **$0.00/month** for your current scale. Authsignal has a generous free tier for 10k MAUs, and Cognito is free up to 50k.
-*   **Auth0:** You will hit the 7,500 MAU free limit immediately with your 10,000 users. You will likely need the "B2C Essentials" plan which starts around **$250-$300/month**.
+## Summary Recommendation
 
----
+**Go with the [Amazon Cognito + Authsignal] strategy.**
 
-## 3. Final Verdict
-
-**Go with Strategy A (Cognito + Authsignal) if:**
-1.  You are absolutely committed to a **Native UI** experience.
-2.  You want to keep costs at **$0** while growing.
-3.  You are willing to spend an extra week on development integration.
-
-**Go with Strategy B (Auth0) if:**
-1.  You need to migrate **this week**.
-2.  You are okay with users seeing a `auth.roccofridge.com` web popup.
-3.  You have budget to spare.
+1.  It preserves the **"FaceID-first"** experience your users love.
+2.  It allows a "Silent Migration" where the user authenticates with the old system, and you seamlessly upgrade them to the new system in the background.
+3.  It avoids the "Email Loop" friction.
 
