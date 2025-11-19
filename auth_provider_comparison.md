@@ -62,6 +62,34 @@ All three generate **JWTs (JSON Web Tokens)**. Your Go server will validate them
     *   **Go Code:** Uses the `auth0` management SDK. Very clean.
     *   **Rate Limits:** Generous for backend-to-backend calls, but strict limits on free/lower tiers.
 
+### D. Emerging Contenders (Clerk & Authsignal)
+
+These two are newer players with distinct philosophies.
+
+#### **Clerk** (The "Frontend-First" Choice)
+*   **Philosophy:** "User Management should be a UI component, not just an API."
+*   **iOS Experience:**
+    *   **Status:** ⚠️ **Web-View Dependent.**
+    *   Clerk’s iOS SDK (`ClerkSDK`) is essentially a wrapper around a web browser session. It does *not* currently support a fully native implementation (like generic `UITextFields` sending JSON to an API) easily without losing security features like bot protection.
+    *   **Pros:** You get "Profile Management," "Avatar Upload," and "Organization Switcher" screens for free (as web views).
+    *   **Cons:** It feels like a web app inside a native shell.
+*   **Go Integration:**
+    *   **SDK:** `github.com/clerkinc/clerk-sdk-go`
+    *   **Middleware:** Very mature. `clerk.WithSession(http.Handler)` automatically injects user context.
+    *   **User Lookup:** Excellent. `client.Users().ListAll(params)` is intuitive and allows searching by email, phone, or external ID easily.
+    *   **Pricing:** **Free for 10k MAU.** Very generous.
+
+#### **Authsignal** (The "Fraud & MFA" Specialist)
+*   **Philosophy:** "You already have a login (e.g., Cognito/Auth0/Custom), but you need secure MFA (Passkeys) and Fraud rules."
+*   **iOS Experience:**
+    *   **Status:** ✅ **Native Passkey Support.**
+    *   They provide a native iOS SDK specifically for **Passkeys (FaceID/TouchID)**. This allows you to use Cognito for the "base" user and Authsignal for the "MFA" layer.
+    *   **UX:** Highly native feel for the verification step.
+*   **Go Integration:**
+    *   **SDK:** `github.com/authsignal/authsignal-go`
+    *   **Role:** It is **not** a primary IdP (Identity Provider). You wouldn't typically "look up a user by email" in Authsignal to find their profile data; you would look them up to check their *risk score* or *MFA status*.
+*   **Best Use Case:** Use **Cognito** for the user directory (free) + **Authsignal** for high-security actions (e.g., "Withdraw Funds" triggers a FaceID check).
+
 ---
 
 ## 3. Pricing Breakdown (Monthly)
