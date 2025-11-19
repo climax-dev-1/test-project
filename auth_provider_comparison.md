@@ -87,6 +87,21 @@
     *   **API:** User API.
     *   **Pros/Cons:** Used to look up *risk status* or *MFA enrollment*, not typically for general user profile data.
 
+### E. Special Use Case: Passkey-First with Email OTP Fallback
+
+You requested a specific flow: **Check Passkey -> (Fallback) -> Email OTP**.
+
+| Provider | Feasibility | Native UI? | Notes |
+| :--- | :--- | :--- | :--- |
+| **Authsignal** | **Best Fit** | ✅ **Yes** | Authsignal is designed exactly for this "MFA orchestration". You can set up a rule: "If user has passkey, challenge passkey. Else, challenge email." The iOS SDK supports native passkeys directly. |
+| **Clerk** | Good Fit | ⚠️ **Webview** | Clerk has "Passkey" and "Email Code" strategies built-in, but the flow is driven by their web components. Doing this *purely natively* is harder. |
+| **Auth0** | Doable | ⚠️ **Webview** | Possible via "Universal Login" (Web). Native Passkey support in Auth0 is still maturing and complex to orchestrate manually without the web redirect. |
+| **Cognito** | **Hard** | ✅ **Yes** | Cognito supports "Custom Auth Challenges" (Lambda triggers). You *could* build this logic (Check Passkey -> Else Email), but you have to write the FIDO2/WebAuthn server-side verification logic yourself in Go/Lambda. It is not "out of the box". |
+| **Authress** | Neutral | ⚠️ **Webview** | Supports the standards, but orchestration would likely happen via their hosted login page. |
+
+**Recommendation for this Flow:**
+If you want this **exact flow** with a **Native UI** and minimal backend headache, **Authsignal** is the strongest candidate. You would use a basic User Directory (like Cognito or your own DB) and delegate the entire "Authentication Challenge" (Passkey vs Email) to Authsignal.
+
 ---
 
 ## 3. Pricing Breakdown (Monthly)
