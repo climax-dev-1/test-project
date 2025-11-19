@@ -10,6 +10,7 @@
 | **User Lookup** | ✅ Via `ListUsers` API | ✅ Via Management API | ✅ Via User API |
 | **Go Integration** | Standard JWKS Verification | Standard JWKS Verification | Specialized SDKs |
 | **Custom Claims** | Via Lambda Triggers (Complex) | Via Actions (Easy JS) | Native Permission Model |
+| **Social Login** | ✅ Limited (Google, FB, Apple, Amazon, OIDC) | ✅ Extensive (30+ providers out of box) | ✅ Standard (Google, Github, Microsoft, etc.) |
 
 ---
 
