@@ -1,0 +1,15 @@
+type Query {
+  getAccount: Account
+}
+
+type Mutation {
+  createAccountIfNotExists: Account!
+}
+
+type Account {
+  id: ID!
+  email: String!
+  userId: String!
+  createdAt: String!
+}
+
