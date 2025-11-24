@@ -1,4 +1,0 @@
-2025/11/24 02:07:10 Migration endpoints enabled
-2025/11/24 02:07:10   POST /migrate/exchange-token - Exchange Passage JWT for Auth0 user
-2025/11/24 02:07:10   GET  /migrate/stats - View migration statistics
-2025/11/24 02:07:10 connect to http://localhost:8080/ for GraphQL playground
